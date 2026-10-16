@@ -1033,7 +1033,7 @@ function renderChannelsList() {
 
         <div class="channel-right">
           <span class="channel-badge-connected ${ch.isSelected ? 'active' : ''}">
-            <i class="fa-solid fa-check"></i> ${ch.isSelected ? 'Selected' : 'Connected'}
+            <i class="fa-solid fa-check"></i> ${ch.isSelected ? 'Selected' : (ch.platform === 'facebook' ? (fbToken ? 'Live Connected' : 'টোকেন বাকি') : 'Connected')}
           </span>
           <button class="btn-remove-channel" onclick="event.stopPropagation(); removeChannel('${ch.id}')" title="মুছে ফেলুন">
             <i class="fa-solid fa-trash"></i>
@@ -1260,6 +1260,19 @@ function startAutoPoster() {
     return;
   }
 
+  // Strict Facebook check: Do NOT pretend to post if no token is configured
+  const hasFb = selectedChannels.some(c => c.platform === 'facebook');
+  if (hasFb) {
+    const fbChannel = selectedChannels.find(c => c.platform === 'facebook');
+    const fbToken = (fbChannel && fbChannel.token) || localStorage.getItem('d2t_fbToken') || '';
+    if (!fbToken) {
+      openFacebookPublishModal(null, fbChannel.id, 'token');
+      showToast('⚠️ ফেসবুক পেজে পোস্ট করার জন্য Access Token দিন অথবা মেটা বিজনেস স্যুট দিয়ে ১-ক্লিকে পোস্ট করুন!', 'warning');
+      addLog("error", `⛔ অটো-পোস্টিং শুরু হয়নি: ফেসবুক পেজ "${fbChannel.name}"-এ পোস্ট করতে Meta Access Token প্রয়োজন। অনুগ্রহ করে পপ-আপ থেকে টোকেন সেভ করুন অথবা মেটা বিজনেস স্যুটে ১-ক্লিকে পোস্ট করুন।`);
+      return;
+    }
+  }
+
   IS_AUTO_POSTING = true;
   updateStatusChip(true, "স্বয়ংক্রিয় পোস্টিং রানিং...");
   const btnStart = document.getElementById('btnStartBulkUpload');
@@ -1353,6 +1366,7 @@ function executeVideoUpload(video, onComplete) {
       addLog("tiktok", `[৩/৪] ⚫ TikTok এ ভিডিও আপলোড ও শিডিউল হচ্ছে (TikTok Direct Post API)...`);
     }
 
+    let fbUploadSuccess = true;
     if (hasFb) {
       const fbChannel = selectedChannels.find(c => c.platform === 'facebook');
       const cleanHandle = fbChannel ? fbChannel.handle.replace(/^@/, '') : '';
@@ -1377,16 +1391,27 @@ function executeVideoUpload(video, onComplete) {
             video.publishedFb = fbData.reelUrl || fbData.postUrl;
             addLog("success", `  🔵 Facebook Reels লাইভ পোস্ট সম্পন্ন: <a href="${video.publishedFb}" target="_blank" style="color: #60a5fa; text-decoration: underline;">${video.publishedFb}</a>`);
           } else {
-            addLog("fb", `  ⚠️ Facebook API রেসপন্স: ${fbData.message || fbData.error}`);
-            video.publishedFb = `https://business.facebook.com/latest/reels_composer?asset_id=${cleanHandle}`;
+            fbUploadSuccess = false;
+            addLog("error", `  ❌ Facebook API ব্যর্থ: ${fbData.message || fbData.error}`);
+            stopAutoPoster();
+            openFacebookPublishModal(video.id, fbChannel.id, 'token');
+            showToast(`ফেসবুক আপলোড এরর: ${fbData.error || fbData.message}`, 'error');
+            return;
           }
         } catch (e) {
+          fbUploadSuccess = false;
           console.error(e);
-          video.publishedFb = `https://business.facebook.com/latest/reels_composer?asset_id=${cleanHandle}`;
+          addLog("error", `  ❌ ফেসবুক নেটওয়ার্ক এরর: ${e.message}`);
+          stopAutoPoster();
+          showToast(`ফেসবুক নেটওয়ার্ক এরর: ${e.message}`, 'error');
+          return;
         }
       } else {
-        addLog("warning", `⚠️ Facebook Page "${fbChannel ? fbChannel.name : 'Chiku bd'}"-এ সরাসরি পোস্ট করতে Page Access Token প্রয়োজন। মেটা বিজনেস স্যুট লিঙ্ক প্রস্তুত করা হয়েছে।`);
-        video.publishedFb = `https://business.facebook.com/latest/reels_composer?asset_id=${cleanHandle}`;
+        fbUploadSuccess = false;
+        addLog("error", `⛔ ফেসবুক পেজ "${fbChannel ? fbChannel.name : 'Chiku bd'}"-এ সরাসরি পোস্ট করতে Access Token প্রয়োজন।`);
+        stopAutoPoster();
+        openFacebookPublishModal(video.id, fbChannel?.id, 'token');
+        return;
       }
     }
 
@@ -1530,7 +1555,7 @@ function escapeHtml(str) {
 let CURRENT_FB_PUBLISH_VIDEO_ID = null;
 let CURRENT_FB_CHANNEL_ID = null;
 
-function openFacebookPublishModal(videoId, channelId) {
+function openFacebookPublishModal(videoId, channelId, defaultTab = 'token') {
   let video = null;
   if (videoId) {
     video = LOADED_VIDEOS.find(v => v.id === videoId);
@@ -1553,6 +1578,23 @@ function openFacebookPublishModal(videoId, channelId) {
 
   CURRENT_FB_PUBLISH_VIDEO_ID = video ? video.id : null;
   CURRENT_FB_CHANNEL_ID = ch.id;
+
+  const tabBtnSuite = document.getElementById('tabBtnSuite');
+  const tabBtnToken = document.getElementById('tabBtnToken');
+  const fbTabSuite = document.getElementById('fbTabSuite');
+  const fbTabToken = document.getElementById('fbTabToken');
+
+  if (defaultTab === 'token') {
+    if (tabBtnToken) tabBtnToken.className = 'btn btn-sm btn-outline active';
+    if (tabBtnSuite) tabBtnSuite.className = 'btn btn-sm btn-ghost';
+    if (fbTabSuite) fbTabSuite.style.display = 'none';
+    if (fbTabToken) fbTabToken.style.display = 'block';
+  } else {
+    if (tabBtnSuite) tabBtnSuite.className = 'btn btn-sm btn-outline active';
+    if (tabBtnToken) tabBtnToken.className = 'btn btn-sm btn-ghost';
+    if (fbTabSuite) fbTabSuite.style.display = 'block';
+    if (fbTabToken) fbTabToken.style.display = 'none';
+  }
 
   const cleanHandle = ch.handle ? ch.handle.replace(/^@/, '') : '';
   const pageNameEl = document.getElementById('fbModalPageName');
