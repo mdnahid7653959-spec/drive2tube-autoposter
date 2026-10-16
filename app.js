@@ -176,6 +176,24 @@ function initEventListeners() {
     });
   }
 
+  // Reset All Queue Status Button
+  const btnResetQueue = document.getElementById('btnResetAllQueueStatus');
+  if (btnResetQueue) {
+    btnResetQueue.addEventListener('click', () => {
+      LOADED_VIDEOS.forEach(v => {
+        v.status = 'pending';
+        v.progress = 0;
+        v.publishedFb = null;
+        v.publishedUrl = null;
+        v.publishedTt = null;
+      });
+      renderVideosQueue();
+      updateQueueStats();
+      showToast('সব ভিডিওর স্ট্যাটাস রিসেট করা হয়েছে (পেন্ডিং)!', 'info');
+      addLog("system", "সব ভিডিওর পোস্টিং স্ট্যাটাস সফলভাবে পেন্ডিং-এ রিসেট করা হয়েছে।");
+    });
+  }
+
   // Start Auto Posting Bulk Button
   const btnStart = document.getElementById('btnStartBulkUpload');
   if (btnStart) btnStart.addEventListener('click', toggleAutoPoster);
@@ -1416,29 +1434,39 @@ function executeVideoUpload(video, onComplete) {
     }
 
     setTimeout(() => {
-      video.status = 'done';
-      video.progress = 100;
-
-      const randomVideoId = generateMockVideoId();
-      const randomTtId = '739' + Math.floor(1000000000 + Math.random() * 9000000000);
-
-      video.publishedUrl = `https://youtu.be/${randomVideoId}`;
-      if (!video.publishedFb) {
-        const randomFbId = '109' + Math.floor(100000000 + Math.random() * 900000000);
-        video.publishedFb = `https://www.facebook.com/reel/${randomFbId}`;
+      // ONLY mark status as done if a real post was made or verified!
+      const realPostsMade = [];
+      if (hasFb && video.publishedFb && !video.publishedFb.includes('reels_composer')) {
+        realPostsMade.push(`🔵 Facebook Reels: ${video.publishedFb}`);
       }
-      video.publishedTt = `https://www.tiktok.com/@creator/video/${randomTtId}`;
+      if (hasYt && video.publishedUrl && !video.publishedUrl.includes('mock')) {
+        realPostsMade.push(`🔴 YouTube Shorts: ${video.publishedUrl}`);
+      }
+      if (hasTt && video.publishedTt && !video.publishedTt.includes('creator')) {
+        realPostsMade.push(`⚫ TikTok: ${video.publishedTt}`);
+      }
 
-      renderVideosQueue();
-      updateQueueStats();
+      if (realPostsMade.length > 0) {
+        video.status = 'done';
+        video.progress = 100;
+        renderVideosQueue();
+        updateQueueStats();
 
-      let logLines = [`[৪/৪] ✅ সফলভাবে পোস্ট সম্পন্ন! (${targetChannelName})`];
-      if (hasYt) logLines.push(`  🔴 YouTube: ${video.publishedUrl}`);
-      if (hasFb) logLines.push(`  🔵 Facebook Reels: ${video.publishedFb}`);
-      if (hasTt) logLines.push(`  ⚫ TikTok: ${video.publishedTt}`);
-
-      addLog("success", logLines.join('<br>'));
-      showToast(`'${video.title.slice(0, 24)}...' সব প্ল্যাটফর্মে পোস্ট সম্পন্ন!`, 'success');
+        let logLines = [`[৪/৪] ✅ সফলভাবে পোস্ট সম্পন্ন! (${targetChannelName})`, ...realPostsMade];
+        addLog("success", logLines.join('<br>'));
+        showToast(`'${video.title.slice(0, 24)}...' লাইভ পোস্ট সম্পন্ন!`, 'success');
+      } else {
+        // No real upload took place!
+        video.status = 'pending';
+        video.progress = 0;
+        video.publishedFb = null;
+        video.publishedUrl = null;
+        video.publishedTt = null;
+        renderVideosQueue();
+        updateQueueStats();
+        addLog("warning", `⚠️ '${video.title}' কোনো সোশ্যাল পেজে লাইভ আপলোড হয়নি কারণ কোনো অ্যাক্টিভ API Access Token পাওয়া যায়নি।`);
+        showToast(`ভিডিওটি লাইভ পোস্ট হয়নি: ফেসবুক পেজ সিলেক্ট করুন ও API Access Token দিন!`, 'warning');
+      }
 
       if (onComplete) onComplete();
     }, 1500);
