@@ -373,6 +373,7 @@ const server = http.createServer(async (req, res) => {
             try {
               const fbJson = JSON.parse(fbBody || '{}');
               if (fbJson.id) {
+                console.log(`[Drive2Tube] Facebook publish SUCCESS: videoId=${fbJson.id}`);
                 res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
                 res.end(JSON.stringify({
                   success: true,
@@ -383,6 +384,7 @@ const server = http.createServer(async (req, res) => {
                   message: `🎉 ভিডিও সফলভাবে ফেসবুক পেজ '${pageId}'-এ লাইভ পাবলিশ হয়েছে! (Video ID: ${fbJson.id})`
                 }));
               } else {
+                console.error(`[Drive2Tube Facebook Error Response]:`, fbBody);
                 const errMessage = fbJson.error?.message || 'মেটা গ্রাফ এপিআই থেকে এরর এসেছে।';
                 res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
                 res.end(JSON.stringify({
