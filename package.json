@@ -1,0 +1,20 @@
+{
+  "name": "drive2tube-autoposter",
+  "version": "1.0.0",
+  "description": "Google Drive to YouTube Shorts, Facebook Reels & TikTok Auto-Poster Studio",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "youtube-shorts",
+    "facebook-reels",
+    "tiktok",
+    "google-drive",
+    "auto-poster",
+    "automation"
+  ],
+  "author": "mdnahid7653959-spec",
+  "license": "MIT"
+}

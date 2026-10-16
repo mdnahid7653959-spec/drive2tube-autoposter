@@ -1,0 +1,8 @@
+node_modules/
+full_drive_page.html
+extracted_text.txt
+test_*.js
+check_*.js
+.env
+.DS_Store
+Thumbs.db
